@@ -47,12 +47,12 @@ program lattice
     allocate(total_lambda(nMC,N))
     allocate(variance(nMC,N))
 
-    open(10,file='Potential_8.csv')
+    open(10,file='AveragePotential_8.csv')
     open(20,file='Deviation_8.csv')
+    open(30,file='Potential_8.csv')
     open(40,file='AfterLambda_8.csv')
     open(50,file='AcceptedU_8.csv')
     open(60,file='Acceptance_Ratio_8.csv')
-
 
     ! ---------------------------------------------------!
     ! ---------------------------------------------------!
@@ -60,43 +60,29 @@ program lattice
         step_size = 0.02
         accepted = 0
         counter = 1
+        AvgE = 0
+        U = 0
         call initializefcc(box,length,x0)
         call initialpotential(initial_U,box,N,x0,d,U_i,d_temp,U_i_temp,sigma)
         xt = x0
         do j=1,nMC
             do k=1,N
+                if(j == nMC/2) then
+                    counter = 1
+                    accepted = 0
+                end if
                 call moveparticle(x0,xt,box,k,N,step_size)
                 call newpotential(U,d,xt,initial_U,box,j,k,N,U_i,d_temp,U_i_temp,sigma)
                 call keepmove(accepted_u,U,x0,xt,initial_U,kt,accepted,i,j,k,N,d,U_i,U_i_temp,d_temp)
+                if(j >= nMC/2 .and. mod(j,50) == 0) call disorder(total_lambda,xt,N,j,k,box,kT)
+                if(j >= nMC/2 .and. mod(j,50) == 0) call averageE(avgE,U,j,k,N,counter,kT,nMC)
                 counter = counter + 1
             end do
-            if(mod(j,50) == 0 .or. j==1) call adjuststep(step_size,accepted,i,counter,j,acceptance_ratio_new, d_a_r_n,kT)
+            if(mod(j,50) == 0) call adjuststep(step_size,accepted,i,counter,j,acceptance_ratio_new,d_a_r_n,kT)
         end do
-        accepted = 0
-        initial_U = U(nMC,N)
-        U = 0
-        counter = 1
-        do j=1,nMC
-            do k=1,N
-                call moveparticle(x0,xt,box,k,N,step_size)
-                call newpotential(U,d,xt,initial_U,box,j,k,N,U_i,d_temp,U_i_temp,sigma)
-                call keepmove(accepted_u,U,x0,xt,initial_U,kt,accepted,i,j,k,N,d,U_i,U_i_temp,d_temp)
-                call disorder(total_lambda,xt,N,j,k,box)
-                call averageE(avgE,U,j,k,N,counter)
-                counter = counter + 1
-            end do
-            if(mod(j,50) == 0 .or. j==1) call adjuststep(step_size,accepted,i,counter,j,acceptance_ratio_new, d_a_r_n,kT)
-        end do
-        call deviation(AvgE,nMC,N,variance)
 
-        ! Write results to disk
-        do j=1,nMC, 50
-            do k=1,N
-                write(10,*) AvgE(j,k), kT
-                write(20,*) variance(j,k), kT
-                write(40,*) total_lambda(j,k), kT
-            end do
-        end do
+        call deviation(AvgE,nMC,N,variance,kT)
+
         print*, kT
 
         kT = kT + kT_delta
