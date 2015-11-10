@@ -209,19 +209,22 @@ contains
     end subroutine
 
 
-    subroutine averageE(avgE,U,j,k,N,counter)
+    subroutine averageE(avgE,U,j,k,N,counter,kT,nMC)
         implicit none
 
         real(8),allocatable,dimension(:,:) :: avgE, U
-        integer                            :: j, k, counter, N
+        real(8)                            :: kT
+        integer                            :: j, k, counter, N, nMC
 
-        if(j==1 .and. k==1) then
+        if(j==nMC/2 .and. k==1) then
             avgE(j,k) = U(j,k)
         else if(k==1) then
-            avgE(j,k) = (avgE(j-1,N) * (counter - 1) + U(j,k)) / counter
+            avgE(j,k) = (avgE(j-50,N) * (counter - 1) + U(j,k)) / counter
         else
             avgE(j,k) = (avgE(j,k-1) * (counter - 1) + U(j,k)) / counter
         end if
+
+        write(10,*) avgE(j,k), kT
 
     end subroutine
 
@@ -230,18 +233,18 @@ contains
 !
 !
 !    !--------------------------------------------------------------------------------
-    subroutine deviation(AvgE,nMC,N,variance)
+    subroutine deviation(AvgE,nMC,N,variance,kT)
         implicit none
 
         integer                            :: i, j, nMC, N, SampleSize
         real(8),allocatable,dimension(:,:) :: AvgE, variance
-        real(8)                            :: M2, delta, mean
+        real(8)                            :: M2, delta, mean, kT
 
         SampleSize = 0
         mean = 0.0
         M2 = 0.0
 
-        do i=1, nMC
+        do i=nMC/2, nMC, 50
             do j=1, N
                 SampleSize = SampleSize + 1
                 delta = AvgE(i,j) - mean
@@ -252,18 +255,19 @@ contains
                 else
                     variance(i,j) = M2 / (SampleSize - 1)
                 end if
+                write(20,*) variance(i,j), kT
             end do
         end do
 
     end subroutine
 
-    subroutine disorder(total_lambda,xt,N,j,k,box)
+    subroutine disorder(total_lambda,xt,N,j,k,box,kT)
 
         implicit none
 
         real(8),allocatable,dimension(:,:) :: xt, total_lambda
         real(8),dimension(3)               :: lambda
-        real(8)                            :: box
+        real(8)                            :: box,kT
         real(8),parameter                  :: pi = 4 * atan(1.0_8)
         integer                            :: i, j, k, l, N
 
@@ -279,10 +283,11 @@ contains
         end do
 
         total_lambda(j,k) = sum(lambda) / 3.0
+        write(40,*) total_lambda(j,k), kT
 
     end subroutine
 
-    subroutine adjuststep(step_size,accepted,i,counter,j,acceptance_ratio_new, delta_acceptance_ratio_new, kT)
+    subroutine adjuststep(step_size,accepted,i,counter,j,acceptance_ratio_new,delta_acceptance_ratio_new,kT)
         implicit none
 
         real(8)                          :: step_size, acceptance_ratio_old, acceptance_ratio_new
@@ -296,6 +301,7 @@ contains
         else
             acceptance_ratio_old = acceptance_ratio_new
         end if
+
         acceptance_ratio_new = real(accepted(i)) / real(counter)
 
         if(j==1) then
@@ -320,7 +326,9 @@ contains
             end if
         end if
 
-        write(60,*) acceptance_ratio_new, kT
+        if(step_size < 1.0d-5) step_size = 0.02
+
+        write(60,*) acceptance_ratio_new, step_size, kT
     end subroutine
 
 end module
