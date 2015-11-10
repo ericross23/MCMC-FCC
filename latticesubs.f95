@@ -163,13 +163,13 @@ contains
     end subroutine
 
 
-    subroutine keepmove(accepted_u,U,x0,xt,initial_U,kt,accepted,i,j,k,N,d,U_i,U_i_temp,d_temp,Dflag,q_k,a_k, counter)
+    subroutine keepmove(accepted_u,U,x0,xt,initial_U,kt,accepted,i,j,k,N,d,U_i,U_i_temp,d_temp)
         implicit none
         real(8),allocatable,dimension(:,:,:):: accepted_u
-        real(8),allocatable,dimension(:,:)  :: U, x0, xt, d, d_temp, U_i, U_i_temp, q_k, a_k
+        real(8),allocatable,dimension(:,:)  :: U, x0, xt, d, d_temp, U_i, U_i_temp
         real(8)                             :: initial_U, test_U, ptrial, kT, randnum
         integer,allocatable,dimension(:)    :: accepted
-        integer                             :: i,j, k, N, flag, Dflag, counter
+        integer                             :: i, j, k, N, flag
 
         if(j==1 .and. k==1) then
             test_U = initial_U
@@ -184,7 +184,6 @@ contains
             x0(k,2) = xt(k,2)
             x0(k,3) = xt(k,3)
             flag = 0
-            call deviation(k,j,U,a_k,q_k,N,flag)
             accepted(i) = accepted(i) + 1
             if(i==3) accepted_u(1,j,k) = U(j,k)
         else
@@ -195,7 +194,6 @@ contains
                 x0(k,2) = xt(k,2)
                 x0(k,3) = xt(k,3)
                 flag = 0
-                call deviation(k,j,U,a_k,q_k,N,flag)
                 accepted(i) = accepted(i) + 1
                 if(i==3) accepted_u(1,j,k) = U(j,k)
             else
@@ -203,24 +201,19 @@ contains
                 xt(k,1) = x0(k,1)
                 xt(k,2) = x0(k,2)
                 xt(k,3) = x0(k,3)
-                flag = 0
-                call deviation(k,j,U,a_k,q_k,N,flag)
                 if(i==3) accepted_u(1,j,k) = 0
                 U_i(:,:) = U_i_temp(:,:)
                 d(:,:) = d_temp(:,:)
             end if
         end if
-
-        if(Dflag == 1 .and. mod(j,50) == 0) write(20,*) q_k(j,k) / counter, kT
-
     end subroutine
 
-    subroutine averageE(avgE,U,j,k,flag,N,kT,counter)
+
+    subroutine averageE(avgE,U,j,k,N,counter)
         implicit none
 
         real(8),allocatable,dimension(:,:) :: avgE, U
-        real(8)                            :: kT
-        integer                            :: j, k, counter, flag, N
+        integer                            :: j, k, counter, N
 
         if(j==1 .and. k==1) then
             avgE(j,k) = U(j,k)
@@ -230,10 +223,6 @@ contains
             avgE(j,k) = (avgE(j,k-1) * (counter - 1) + U(j,k)) / counter
         end if
 
-
-        if(flag == 1 .and. mod(j,50) == 0) write(10,*) AvgE(j,k), kT
-
-
     end subroutine
 
 !    !--------------------------------------------------------------------------------
@@ -241,47 +230,42 @@ contains
 !
 !
 !    !--------------------------------------------------------------------------------
-    subroutine deviation(k,j,U,a_k,q_k,N,flag)
+    subroutine deviation(AvgE,nMC,N,variance)
         implicit none
 
-        integer                            :: j, N, k, flag
-        real(8),allocatable,dimension(:,:) :: a_k, q_k, U
+        integer                            :: i, j, nMC, N, SampleSize
+        real(8),allocatable,dimension(:,:) :: AvgE, variance
+        real(8)                            :: M2, delta, mean
 
-        if(flag == 0) then
-            if (k == 1 .and. j == 1) then
-                a_k(j,k) = 0
-                q_k(j,k) = 0
-            else if (k == 1) then
-                a_k(j,k) = a_k(j-1,N) + (U(j,k) - a_k(j-1,N)) / ((N * j) + k - N)
-                q_k(j,k) = q_k(j-1,N) + (U(j,k) - a_k(j-1,N)) * (U(j,k) - a_k(j,k))
-            else
-                a_k(j,k) = a_k(j,k-1) + (U(j,k) - a_k(j,k-1)) / ((N * j) + k - N)
-                q_k(j,k) = q_k(j,k-1) + (U(j,k) - a_k(j,k-1)) * (U(j,k) - a_k(j,k))
-            end if
-        else
-            if (k == 1 .and. j == 1) then
-                a_k(j,k) = 0
-                q_k(j,k) = 0
-            else if (k == 1) then
-                a_k(j,k) = a_k(j-1,N) + (U(j-1,N) - a_k(j-1,N)) / ((N * j) + k - N)
-                q_k(j,k) = q_k(j-1,N) + (U(j-1,N) - a_k(j-1,N)) * (U(j-1,N) - a_k(j,k))
-            else
-                a_k(j,k) = a_k(j,k-1) + (U(j,k-1) - a_k(j,k-1)) / ((N * j) + k - N)
-                q_k(j,k) = q_k(j,k-1) + (U(j,k-1) - a_k(j,k-1)) * (U(j,k-1) - a_k(j,k))
-            end if
-        end if
+        SampleSize = 0
+        mean = 0.0
+        M2 = 0.0
+
+        do i=1, nMC
+            do j=1, N
+                SampleSize = SampleSize + 1
+                delta = AvgE(i,j) - mean
+                mean = mean + delta/SampleSize
+                M2 = M2 + delta * (AvgE(i,j) - mean)
+                if(SampleSize < 2) then
+                    variance(i,j) = 0.0
+                else
+                    variance(i,j) = M2 / (SampleSize - 1)
+                end if
+            end do
+        end do
 
     end subroutine
 
-    subroutine disorder(total_lambda,xt,N,j,k,box,Dflag,kT)
+    subroutine disorder(total_lambda,xt,N,j,k,box)
 
         implicit none
 
         real(8),allocatable,dimension(:,:) :: xt, total_lambda
         real(8),dimension(3)               :: lambda
-        real(8)                            :: box, kT
+        real(8)                            :: box
         real(8),parameter                  :: pi = 4 * atan(1.0_8)
-        integer                            :: i, j, k, l, N, Dflag
+        integer                            :: i, j, k, l, N
 
         lambda(:) = 0
         do i=1,3
@@ -295,9 +279,6 @@ contains
         end do
 
         total_lambda(j,k) = sum(lambda) / 3.0
-
-        if(Dflag==1 .and. mod(j,50) == 0) write(40,*) total_lambda(j,k), kT
-
 
     end subroutine
 
