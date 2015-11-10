@@ -7,7 +7,7 @@ program lattice
     real(8)                             :: volume, density, sigma, step_size, acceptance_ratio_new
     real(8)                             :: d_a_r_n
     integer,allocatable,dimension(:)    :: accepted
-    integer                             :: nkT, N, nMC, length, i, j, k, counter, Uflag, Dflag
+    integer                             :: nkT, N, nMC, length, i, j, k, counter
 
     call random_seed()
     call cpu_time(start)
@@ -21,7 +21,7 @@ program lattice
     nkT = int((kT_final - kT_init) / kT_delta) + 2
     kT = kT_init
     N=32
-    nMC=10000
+    nMC=100000
     length = int((real(N)/4) ** (1.0/3.0))
     box = 2.0d0 ** (2.0d0/3.0d0)*dfloat(length)
     lattice_parameter = box/dfloat(length)
@@ -58,8 +58,6 @@ program lattice
     ! ---------------------------------------------------!
     do i=1,nkT
         step_size = 0.02
-        Uflag = 0
-        Dflag = 0
         accepted = 0
         counter = 1
         call initializefcc(box,length,x0)
@@ -70,8 +68,6 @@ program lattice
                 call moveparticle(x0,xt,box,k,N,step_size)
                 call newpotential(U,d,xt,initial_U,box,j,k,N,U_i,d_temp,U_i_temp,sigma)
                 call keepmove(accepted_u,U,x0,xt,initial_U,kt,accepted,i,j,k,N,d,U_i,U_i_temp,d_temp)
-                call disorder(total_lambda,xt,N,j,k,box)
-                call averageE(avgE,U,j,k,N,counter)
                 counter = counter + 1
             end do
             if(mod(j,50) == 0 .or. j==1) call adjuststep(step_size,accepted,i,counter,j,acceptance_ratio_new, d_a_r_n,kT)
@@ -79,8 +75,6 @@ program lattice
         accepted = 0
         initial_U = U(nMC,N)
         U = 0
-        Uflag = 1
-        Dflag = 1
         counter = 1
         do j=1,nMC
             do k=1,N
@@ -96,7 +90,7 @@ program lattice
         call deviation(AvgE,nMC,N,variance)
 
         ! Write results to disk
-        do j=1,nMC
+        do j=1,nMC, 50
             do k=1,N
                 write(10,*) AvgE(j,k), kT
                 write(20,*) variance(j,k), kT
