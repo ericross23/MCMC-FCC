@@ -331,4 +331,50 @@ contains
         write(60,*) acceptance_ratio_new, step_size, kT
     end subroutine
 
+    subroutine gr(switch,box,N,xt,density,kT,g,nhis,ngr,delg)
+        implicit none
+
+        integer                            :: switch, i, j, ngr, nhis, N, ig
+        real(8),parameter                  :: pi = 4 * atan(1.0_8)
+        real(8),allocatable,dimension(:)   :: g
+        real(8),allocatable,dimension(:,:) :: xt
+        real(8)                            :: delg, dx, dy, dz, r, density, vb, kT, box, nid
+
+        if(switch == 0) then
+            ngr = 0
+            delg = box/(2*nhis)
+            do i=0,nhis
+                g(i) = 0
+            end do
+        else if(switch == 1) then
+            ngr = ngr + 1
+            do i=1, N-1
+                do j=i+1, N
+                    dx = xt(i,1) - xt(j,1)
+                    dx = dx - box*nint(dx/box)
+                    dy = xt(i,2) - xt(j,2)
+                    dy = dy - box*nint(dy/box)
+                    dz = xt(i,3) - xt(j,3)
+                    dz = dz - box*nint(dz/box)
+                    r = sqrt(dx**2 + dy**2 + dz**2)
+                    if (r < box/2) then
+                        ig = int(r/delg)
+                        g(ig) = g(ig) + 2
+                    end if
+                end do
+            end do
+        else if(switch == 2) then
+            do i=1, nhis
+                r = delg * (i+0.5)
+                vb = ((i+1)**3-i**3) * delg**3
+                nid = (4./3) * pi * vb * density
+                g(i) = g(i) / (ngr * N * nid)
+                write(70,*) r, g(i), kT
+            end do
+            print*, ngr
+        end if
+        return
+
+    end subroutine
+
 end module

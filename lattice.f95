@@ -3,11 +3,12 @@ program lattice
     implicit none
     real(8),allocatable,dimension(:,:,:):: accepted_u
     real(8),allocatable,dimension(:,:)  :: x0, xt, d, U, U_i, d_temp, U_i_temp, AvgE, variance, total_lambda
+    real(8),allocatable,dimension(:)    :: g
     real(8)                             :: kT_init, kT_final, kT_delta, kT, box, lattice_parameter, initial_U, start, finish
     real(8)                             :: volume, density, sigma, step_size, acceptance_ratio_new
-    real(8)                             :: d_a_r_n
+    real(8)                             :: d_a_r_n, delg
     integer,allocatable,dimension(:)    :: accepted
-    integer                             :: nkT, N, nMC, length, i, j, k, counter
+    integer                             :: nkT, N, nMC, length, i, j, k, counter, nhis, switch, ngr
 
     call random_seed()
     call cpu_time(start)
@@ -20,14 +21,17 @@ program lattice
     kT_delta = 1.2
     nkT = int((kT_final - kT_init) / kT_delta) + 2
     kT = kT_init
-    N=32
-    nMC=100000
+    N=256
+    nMC=10000
     length = int((real(N)/4) ** (1.0/3.0))
-    box = 2.0d0 ** (2.0d0/3.0d0)*dfloat(length)
+    density = 0.8
+    box = (N/density) ** (1.0/3.0)
     lattice_parameter = box/dfloat(length)
     volume = box ** 3.0d+0
-    density = 0.8
-    sigma = density ** (1.0/3.0)
+
+    sigma = ((density * volume)/N) ** (1.0/3.0)
+    nhis = 80
+    print*, box
 
     ! ---------------------------------------------------!
     ! ---------------------------------------------------!
@@ -46,6 +50,7 @@ program lattice
     allocate(AvgE(nMC,N))
     allocate(total_lambda(nMC,N))
     allocate(variance(nMC,N))
+    allocate(g(0:nhis))
 
     open(10,file='AveragePotential_8.csv')
     open(20,file='Deviation_8.csv')
@@ -53,10 +58,19 @@ program lattice
     open(40,file='AfterLambda_8.csv')
     open(50,file='AcceptedU_8.csv')
     open(60,file='Acceptance_Ratio_8.csv')
+    open(70,file='RadialDistribution_8.csv')
 
     ! ---------------------------------------------------!
     ! ---------------------------------------------------!
+
+
+
     do i=1,nkT
+
+        switch = 0
+        call gr(switch,box,N,xt,density,kT,g,nhis,ngr,delg)
+        switch = 1
+
         step_size = 0.02
         accepted = 0
         counter = 1
@@ -78,11 +92,13 @@ program lattice
                 if(j >= nMC/2 .and. mod(j,50) == 0) call averageE(avgE,U,j,k,N,counter,kT,nMC)
                 counter = counter + 1
             end do
+            call gr(switch,box,N,xt,density,kT,g,nhis,ngr,delg)
             if(mod(j,50) == 0) call adjuststep(step_size,accepted,i,counter,j,acceptance_ratio_new,d_a_r_n,kT)
         end do
 
         call deviation(AvgE,nMC,N,variance,kT)
-
+        switch = 2
+        call gr(switch,box,N,xt,density,kT,g,nhis,ngr,delg)
         print*, kT
 
         kT = kT + kT_delta
